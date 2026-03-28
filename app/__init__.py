@@ -1,0 +1,1 @@
+"""Apple price watcher package."""

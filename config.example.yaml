@@ -1,0 +1,26 @@
+telegram:
+  api_id: 123456
+  api_hash: your_api_hash
+  session_name: sessions/apple_prices
+  best_channel: "@best_channel_or_numeric_id"
+  best_message_id: 12345
+  sonic_channel: "@sonic_channel_or_numeric_id"
+  sonic_history_limit: 40
+  sonic_batch_window_minutes: 20
+  sonic_batch_gap_minutes: 6
+
+google_sheets:
+  enabled: true
+  spreadsheet_id: your_google_sheet_id
+  worksheet_name: Apple Prices
+  service_account_file: service-account.json
+
+matching:
+  similarity_threshold: 0.74
+  strong_match_threshold: 0.86
+
+cache_dir: cache
+log_level: INFO
+currency: RUB
+initial_rebuild: true
+rebuild_debounce_seconds: 2.0
