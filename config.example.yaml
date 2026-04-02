@@ -5,6 +5,10 @@ telegram:
   best_channel: "@best_channel_or_numeric_id"
   best_message_id: 12345
   sonic_channel: "@sonic_channel_or_numeric_id"
+  sonic_scan_limit: 200
+
+  # Legacy / optional:
+  sonic_message_ids: []
   sonic_history_limit: 40
   sonic_batch_window_minutes: 20
   sonic_batch_gap_minutes: 6

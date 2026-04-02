@@ -7,3 +7,9 @@ cache/*.txt
 cache/*.xlsx
 sessions/*.session
 sessions/*.session-journal
+.env
+*.json
+!.vscode/*.json
+!package*.json
+!tsconfig*.json
+!config*.json

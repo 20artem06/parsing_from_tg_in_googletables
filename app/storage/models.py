@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import Enum
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -15,6 +16,17 @@ class SourceKind(str, Enum):
     SONIC = "SONIC"
 
 
+class SourcePartState(str, Enum):
+    OPEN = "open"
+    CLOSED = "closed"
+    FAILED = "failed"
+
+
+class SnapshotFreshness(str, Enum):
+    FRESH = "fresh"
+    STALE = "stale"
+
+
 class TelegramTextMessage(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -26,11 +38,38 @@ class TelegramTextMessage(BaseModel):
 class SonicBatch(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
+    requested_message_ids: list[int] = Field(default_factory=list)
+    scanned_message_count: int = 0
     message_ids: list[int] = Field(default_factory=list)
+    price_message_ids: list[int] = Field(default_factory=list)
+    closed_message_ids: list[int] = Field(default_factory=list)
+    missing_message_ids: list[int] = Field(default_factory=list)
+    non_price_message_ids: list[int] = Field(default_factory=list)
     messages: list[TelegramTextMessage] = Field(default_factory=list)
     raw_text: str = ""
     started_at: datetime | None = None
     finished_at: datetime | None = None
+
+
+class SonicSectionSnapshot(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    part_key: str | None = None
+    block_key: str | None = None
+    section_key: str | None = None
+    section_name: str | None = None
+    message_ids: list[int] = Field(default_factory=list)
+    items: list["RawSonicItem"] = Field(default_factory=list)
+
+
+class SonicChannelSnapshot(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    scanned_message_count: int = 0
+    open_message_ids: list[int] = Field(default_factory=list)
+    closed_message_ids: list[int] = Field(default_factory=list)
+    ignored_message_ids: list[int] = Field(default_factory=list)
+    sections: list[SonicSectionSnapshot] = Field(default_factory=list)
 
 
 class RawBestItem(BaseModel):
@@ -47,6 +86,8 @@ class RawBestItem(BaseModel):
     currency: str = "RUB"
     raw_flag: str | None = None
     country_flag: str | None = None
+    part_key: str | None = None
+    snapshot_freshness: SnapshotFreshness = SnapshotFreshness.FRESH
 
 
 class RawSonicItem(BaseModel):
@@ -64,6 +105,10 @@ class RawSonicItem(BaseModel):
     raw_flag: str | None = None
     country_flag: str | None = None
     model_code: str | None = None
+    part_key: str | None = None
+    block_key: str | None = None
+    section_key: str | None = None
+    snapshot_freshness: SnapshotFreshness = SnapshotFreshness.FRESH
 
 
 class NormalizedItem(BaseModel):
@@ -96,6 +141,38 @@ class NormalizedItem(BaseModel):
     tokens: list[str] = Field(default_factory=list)
     source_sheet: str | None = None
     source_section: str | None = None
+    source_part_key: str | None = None
+    source_block_key: str | None = None
+    source_section_key: str | None = None
+    snapshot_freshness: SnapshotFreshness = SnapshotFreshness.FRESH
+
+
+class BestSheetState(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    part_key: str
+    sheet_name: str
+    state: SourcePartState
+    current_rows: list[RawBestItem] = Field(default_factory=list)
+    last_valid_rows: list[RawBestItem] = Field(default_factory=list)
+    last_valid_at: datetime | None = None
+    last_seen_at: datetime = Field(default_factory=utcnow)
+    source_meta: dict[str, Any] = Field(default_factory=dict)
+
+
+class SonicSectionState(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    part_key: str
+    block_key: str
+    section_key: str
+    section_name: str | None = None
+    state: SourcePartState
+    current_rows: list[RawSonicItem] = Field(default_factory=list)
+    last_valid_rows: list[RawSonicItem] = Field(default_factory=list)
+    last_valid_at: datetime | None = None
+    last_seen_at: datetime = Field(default_factory=utcnow)
+    source_meta: dict[str, Any] = Field(default_factory=dict)
 
 
 class MatchResult(BaseModel):
@@ -192,6 +269,7 @@ class RebuildStats(BaseModel):
     merged_count: int = 0
     overridden_by_sonic: int = 0
     appended_new_from_sonic: int = 0
+    best_overrode_stale_sonic: int = 0
     best_from_cache: bool = False
     sonic_from_cache: bool = False
     used_cached_merged: bool = False

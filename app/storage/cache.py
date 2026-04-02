@@ -6,7 +6,13 @@ from typing import Any
 
 from pydantic import BaseModel, TypeAdapter
 
-from app.storage.models import MergeResult, RawBestItem, RawSonicItem
+from app.storage.models import (
+    BestSheetState,
+    MergeResult,
+    RawBestItem,
+    RawSonicItem,
+    SonicSectionState,
+)
 
 
 class CacheStore:
@@ -38,6 +44,14 @@ class CacheStore:
     def sonic_batch_text_path(self) -> Path:
         return self.base_dir / "latest_sonic_batch.txt"
 
+    @property
+    def best_parts_state_path(self) -> Path:
+        return self.base_dir / "best_parts_state.json"
+
+    @property
+    def sonic_parts_state_path(self) -> Path:
+        return self.base_dir / "sonic_parts_state.json"
+
     def save_best_excel(self, payload: bytes) -> Path:
         self.best_excel_path.write_bytes(payload)
         return self.best_excel_path
@@ -53,11 +67,23 @@ class CacheStore:
     def load_best_parsed(self) -> list[RawBestItem]:
         return self._load_json(self.best_parsed_path, list[RawBestItem], default=[])
 
+    def save_best_parts_state(self, parts: list[BestSheetState]) -> None:
+        self._save_json(self.best_parts_state_path, parts)
+
+    def load_best_parts_state(self) -> list[BestSheetState]:
+        return self._load_json(self.best_parts_state_path, list[BestSheetState], default=[])
+
     def save_sonic_parsed(self, items: list[RawSonicItem]) -> None:
         self._save_json(self.sonic_parsed_path, items)
 
     def load_sonic_parsed(self) -> list[RawSonicItem]:
         return self._load_json(self.sonic_parsed_path, list[RawSonicItem], default=[])
+
+    def save_sonic_parts_state(self, parts: list[SonicSectionState]) -> None:
+        self._save_json(self.sonic_parts_state_path, parts)
+
+    def load_sonic_parts_state(self) -> list[SonicSectionState]:
+        return self._load_json(self.sonic_parts_state_path, list[SonicSectionState], default=[])
 
     def save_merged(self, result: MergeResult) -> None:
         self._save_json(self.merged_path, result)

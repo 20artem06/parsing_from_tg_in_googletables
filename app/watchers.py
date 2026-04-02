@@ -43,9 +43,9 @@ class TelegramWatchers:
         await self.runner.request(f"BEST edited:{event.message.id}")
 
     async def _on_sonic_new_message(self, event) -> None:
-        self.logger.info("Caught SONIC new message event for message_id=%s", event.message.id)
+        self.logger.info("Rebuild triggered by SONIC new message_id=%s", event.message.id)
         await self.runner.request(f"SONIC new:{event.message.id}")
 
     async def _on_sonic_message_edited(self, event) -> None:
-        self.logger.info("Caught SONIC edit event for message_id=%s", event.message.id)
+        self.logger.info("Rebuild triggered by SONIC edited message_id=%s", event.message.id)
         await self.runner.request(f"SONIC edited:{event.message.id}")

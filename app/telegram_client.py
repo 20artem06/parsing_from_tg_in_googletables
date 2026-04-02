@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from datetime import timedelta
+import logging
 from pathlib import Path
 
 from telethon import TelegramClient
 
 from app.config import TelegramConfig
+from app.parsers.sonic_text_parser import SonicTextParser
 from app.storage.models import SonicBatch, TelegramTextMessage
 
 
@@ -15,6 +16,8 @@ class TelegramSourceClient:
         self._client: TelegramClient | None = None
         self.best_entity = None
         self.sonic_entity = None
+        self.logger = logging.getLogger(__name__)
+        self.sonic_text_parser = SonicTextParser()
 
     @property
     def client(self) -> TelegramClient:
@@ -54,39 +57,54 @@ class TelegramSourceClient:
             message
             async for message in self.client.iter_messages(
                 self.sonic_entity,
-                limit=self.config.sonic_history_limit,
+                limit=self.config.sonic_scan_limit or None,
             )
         ]
-
-        textual = [message for message in history if self._extract_text(message)]
-        if not textual:
-            raise RuntimeError("No textual messages available in SONIC history window")
-
-        anchor = textual[0]
-        window = timedelta(minutes=self.config.sonic_batch_window_minutes)
-        gap = timedelta(minutes=self.config.sonic_batch_gap_minutes)
-        selected = [anchor]
-        previous_date = anchor.date
-
-        for message in textual[1:]:
-            if anchor.date - message.date > window:
-                break
-            if previous_date - message.date > gap:
-                break
-            selected.append(message)
-            previous_date = message.date
-
-        selected.reverse()
-        messages = [
-            TelegramTextMessage(message_id=message.id, date=message.date, text=self._extract_text(message))
-            for message in selected
+        textual = [
+            message
+            for message in reversed(history)
+            if message is not None and self._extract_text(message)
         ]
+        if not textual:
+            raise RuntimeError("No textual messages available in SONIC channel")
+
+        self.logger.info("Scanned SONIC channel messages = %s", len(textual))
+
+        messages = [
+            TelegramTextMessage(
+                message_id=message.id,
+                date=message.date,
+                text=self._extract_text(message),
+            )
+            for message in textual
+        ]
+        price_message_ids: list[int] = []
+        closed_message_ids: list[int] = []
+        non_price_message_ids: list[int] = []
+
+        for message in messages:
+            if self.sonic_text_parser._is_placeholder_message(message.text):
+                closed_message_ids.append(message.message_id)
+                continue
+            if self.sonic_text_parser.is_price_message(message.text):
+                price_message_ids.append(message.message_id)
+                continue
+            non_price_message_ids.append(message.message_id)
+
         return SonicBatch(
-            message_ids=[message.message_id for message in messages],
+            requested_message_ids=[],
+            scanned_message_count=len(textual),
+            message_ids=price_message_ids,
+            price_message_ids=price_message_ids,
+            closed_message_ids=closed_message_ids,
+            missing_message_ids=[],
+            non_price_message_ids=non_price_message_ids,
             messages=messages,
-            raw_text="\n\n".join(message.text for message in messages),
-            started_at=messages[0].date if messages else None,
-            finished_at=messages[-1].date if messages else None,
+            raw_text="\n\n".join(
+                message.text for message in messages if message.message_id in price_message_ids
+            ),
+            started_at=messages[0].date,
+            finished_at=messages[-1].date,
         )
 
     def _extract_text(self, message) -> str:

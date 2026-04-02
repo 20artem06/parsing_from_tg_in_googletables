@@ -6,7 +6,7 @@ from typing import Any
 
 import yaml
 from dotenv import load_dotenv
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class TelegramConfig(BaseModel):
@@ -18,9 +18,39 @@ class TelegramConfig(BaseModel):
     best_channel: str | int
     best_message_id: int
     sonic_channel: str | int
+    sonic_scan_limit: int = 200
+    sonic_message_ids: list[int] = Field(default_factory=list)
     sonic_history_limit: int = 40
     sonic_batch_window_minutes: int = 20
     sonic_batch_gap_minutes: int = 6
+
+    @field_validator("sonic_message_ids", mode="before")
+    @classmethod
+    def parse_sonic_message_ids(cls, value: Any) -> list[int]:
+        if value in (None, "", []):
+            return []
+
+        if isinstance(value, str):
+            raw_items = value.split(",")
+        elif isinstance(value, (list, tuple, set)):
+            raw_items = list(value)
+        else:
+            raise TypeError("sonic_message_ids must be a comma-separated string or list")
+
+        parsed: list[int] = []
+        seen: set[int] = set()
+        for raw_item in raw_items:
+            text = str(raw_item).strip()
+            if not text:
+                continue
+            if not text.lstrip("-").isdigit():
+                raise ValueError(f"Invalid SONIC message id: {text}")
+            message_id = int(text)
+            if message_id in seen:
+                continue
+            parsed.append(message_id)
+            seen.add(message_id)
+        return parsed
 
 
 class GoogleSheetsConfig(BaseModel):
@@ -85,6 +115,18 @@ def _maybe_bool(value: str | None) -> bool | None:
     return cleaned.lower() in {"1", "true", "yes", "on"}
 
 
+def _drop_none_values(value: Any) -> Any:
+    if isinstance(value, dict):
+        cleaned: dict[str, Any] = {}
+        for key, item in value.items():
+            normalized = _drop_none_values(item)
+            if normalized is None:
+                continue
+            cleaned[key] = normalized
+        return cleaned
+    return value
+
+
 def load_config(config_path: str | Path | None = None) -> AppConfig:
     load_dotenv()
 
@@ -103,6 +145,8 @@ def load_config(config_path: str | Path | None = None) -> AppConfig:
             "best_channel": _maybe_int(os.getenv("BEST_CHANNEL")),
             "best_message_id": _clean_env_value(os.getenv("BEST_MESSAGE_ID")),
             "sonic_channel": _maybe_int(os.getenv("SONIC_CHANNEL")),
+            "sonic_scan_limit": _clean_env_value(os.getenv("SONIC_SCAN_LIMIT")),
+            "sonic_message_ids": _clean_env_value(os.getenv("SONIC_MESSAGE_IDS")),
             "sonic_history_limit": _clean_env_value(os.getenv("SONIC_HISTORY_LIMIT")),
             "sonic_batch_window_minutes": _clean_env_value(
                 os.getenv("SONIC_BATCH_WINDOW_MINUTES")
@@ -136,5 +180,5 @@ def load_config(config_path: str | Path | None = None) -> AppConfig:
         ),
     }
 
-    merged = _deep_merge(file_config, env_config)
+    merged = _deep_merge(file_config, _drop_none_values(env_config))
     return AppConfig.model_validate(merged)

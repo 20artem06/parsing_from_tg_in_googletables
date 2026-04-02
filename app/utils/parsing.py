@@ -22,8 +22,9 @@ def extract_flag(text: str) -> str | None:
 
 def extract_model_code(text: str) -> str | None:
     match = re.search(r"\(([A-Z0-9]{4,12})\)", text)
-    if match:
+    if match and any(char.isalpha() for char in match.group(1)):
         return match.group(1)
+
     match = re.search(r"\b([A-Z]{2,5}\d[A-Z0-9]{1,8})\b", text)
     return match.group(1) if match else None
 
